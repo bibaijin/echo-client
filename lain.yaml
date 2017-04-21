@@ -1,0 +1,23 @@
+appname: echo-client
+
+build:
+  base: golang:1.8
+  prepare:
+    version: 201704220054
+  script:
+    - mkdir -p $GOPATH/src/github.com/bibaijin/echo-client/
+    - cp -rf . $GOPATH/src/github.com/bibaijin/echo-client/
+    - cd $GOPATH/src/github.com/bibaijin/echo-client/ && go install
+
+release:
+  dest_base: registry.yxapp.xyz/centos:1.0.1
+  copy:
+    - src: $GOPATH/bin/echo-client
+      dest: /echo
+
+use_services:
+  echo-service:
+    - echod
+
+proc.worker:
+  cmd: /echo

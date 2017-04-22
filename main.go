@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -14,7 +15,8 @@ import (
 const (
 	// LogFlag 控制日志的前缀
 	LogFlag = log.LstdFlags | log.Lmicroseconds | log.Lshortfile
-	// Interval 表示重连或者写数据的间隔时间
+	server  = "echod:8080"
+	// interval 表示重连或者写数据的间隔时间
 	interval = 5 * time.Second
 	message  = "ping\n"
 )
@@ -30,11 +32,12 @@ func main() {
 
 	running := true
 	for running {
-		conn, err := net.Dial("tcp", "echod:8080")
+		infoLogger.Printf("Will connect to server: %s...", server)
+		conn, err := net.Dial("tcp", server)
 		if err != nil {
 			errLogger.Printf("net.Dial() failed, error: %s.", err)
 		} else {
-			infoLogger.Printf("Accept a connection, RemoteAddr: %s.", conn.RemoteAddr())
+			infoLogger.Printf("Connected, RemoteAddr: %s.", conn.RemoteAddr())
 
 			handle(conn, quit)
 		}
@@ -68,7 +71,12 @@ func handle(conn io.ReadWriteCloser, quit chan os.Signal) {
 			running = false
 		}
 
-		infoLogger.Printf("Write %d bytes.", n)
+		if err = buf.Flush(); err != nil {
+			errLogger.Printf("buf.Flush() failed, error: %s.", err)
+			running = false
+		}
+
+		infoLogger.Printf("Write a message: %s, length: %d bytes.", strings.TrimSpace(message), n)
 
 		s, err := buf.ReadString('\n')
 		if err != nil {
@@ -76,8 +84,11 @@ func handle(conn io.ReadWriteCloser, quit chan os.Signal) {
 			running = false
 		}
 
+		infoLogger.Printf("Read a response: %s.", strings.TrimSpace(s))
+
 		if s != message {
-			errLogger.Printf("Wrong message, want: %s, got: %s.", message, s)
+			errLogger.Printf("Response is wrong, want: %s, got: %s.",
+				strings.TrimSpace(message), strings.TrimSpace(s))
 			running = false
 		}
 
@@ -87,7 +98,7 @@ func handle(conn io.ReadWriteCloser, quit chan os.Signal) {
 			running = false
 			quit <- signal
 		case <-time.Tick(interval):
-			infoLogger.Printf("Ready for another message.")
+			infoLogger.Printf("Will write another message...")
 		}
 	}
 }
